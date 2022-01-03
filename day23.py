@@ -51,7 +51,18 @@ def valid_free_room(c, hallway_idx, board):
             return None
     return dest_room_num
 
-        
+def is_room_blocked(room, room_depth):
+    for i in range(room_depth):
+        if room[i] != ".":
+            return True
+    return False
+
+def get_empty_room_depth(room):
+    for i in range(len(room)):
+        if room[i] != '.':
+            return i - 1
+    return len(room) - 1
+            
 
 def possible_moves(board):
     # yield possible moves with their cost
@@ -63,8 +74,7 @@ def possible_moves(board):
             if not is_amphipod(c):
                 continue
             cost = 10 ** (ord(c) - ord('A'))
-            if room_depth == 1 and is_amphipod(room[0]):
-                # blocked, no move possible
+            if is_room_blocked(room, room_depth):
                 continue
 
             # room to hallway
@@ -77,7 +87,8 @@ def possible_moves(board):
             if dest_room_num is not None:
                 if dest_room_num == room_num:
                     continue
-                dest_room_depth = 1 if "." == rooms[dest_room_num][1] else 0
+
+                dest_room_depth = get_empty_room_depth(rooms[dest_room_num])
                 moves = (1 + room_depth) + abs(room_num - dest_room_num) * 2 + (1 + dest_room_depth)
                 yield (room_num, room_depth, None), (dest_room_num, dest_room_depth, None), moves * cost
 
@@ -88,12 +99,31 @@ def possible_moves(board):
         cost = 10 ** (ord(c) - ord('A'))
         dest_room_num = valid_free_room(c, hallway_idx, board)
         if dest_room_num is not None:
-            dest_room_depth = 1 if "." == rooms[dest_room_num][1] else 0
-            moves = abs((dest_room_num * 2) + 2 - hallway_idx) + (1 + dest_room_depth)
+            dest_room_depth = get_empty_room_depth(rooms[dest_room_num])
+            try:
+                moves = abs((dest_room_num * 2) + 2 - hallway_idx) + (1 + dest_room_depth)
+            except TypeError:
+                import pdb; pdb.set_trace()
             yield (None, None, hallway_idx), (dest_room_num, dest_room_depth, None), moves * cost
 
 def is_final(board):
-    return board[0] == ("AA", "BB", "CC", "DD")
+    rooms, hallway = board
+    room_len = len(rooms[0])
+    return board[0] == ("A" * room_len, "B" * room_len, "C" * room_len, "D" * room_len)
+
+def add_to_room(room, c):
+    depth = get_empty_room_depth(room)
+    room_list = list(room)
+    room_list[depth] = c
+    return "".join(room_list)
+
+def remove_from_room(room):
+    depth = get_empty_room_depth(room)
+    room_list = list(room)
+    if depth + 1 >= len(room):
+        raise Exception("unexpected")
+    room_list[depth + 1] = "."
+    return "".join(room_list)
 
 def new_board_from_pos(board, old_position, new_position):
     rooms, hallway = board
@@ -103,17 +133,12 @@ def new_board_from_pos(board, old_position, new_position):
         raise Exception("unexpected")
     if old_room_num is None:
         # hallway to room
-        new_room = rooms[new_room_num]
         c = hallway[old_hallway_idx]
         ret_hallway = list(hallway)
         ret_hallway[old_hallway_idx] = "."
         ret_hallway = "".join(ret_hallway)
         ret_rooms = list(rooms)
-        if new_room[1] == ".":
-            ret_rooms[new_room_num] = f".{c}"
-        else:
-            ret_rooms[new_room_num] = f"{c}{new_room[1]}"
-        
+        ret_rooms[new_room_num] = add_to_room(ret_rooms[new_room_num], c)
         return (tuple(ret_rooms), ret_hallway)
     elif new_room_num is None:
         # room to hallway
@@ -123,10 +148,7 @@ def new_board_from_pos(board, old_position, new_position):
         ret_hallway[new_hallway_idx] = c
         ret_hallway = "".join(ret_hallway)
         ret_rooms = list(rooms)
-        if old_room_depth == 0:
-            ret_rooms[old_room_num] = f".{old_room[1]}"
-        else:
-            ret_rooms[old_room_num] = ".."
+        ret_rooms[old_room_num] = remove_from_room(ret_rooms[old_room_num])
         return (tuple(ret_rooms), ret_hallway)
     else:
         # room to room
@@ -134,14 +156,8 @@ def new_board_from_pos(board, old_position, new_position):
         new_room = rooms[new_room_num]
         c = old_room[old_room_depth]
         ret_rooms = list(rooms)
-        if old_room_depth == 0:
-            ret_rooms[old_room_num] = f".{old_room[1]}"
-        else:
-            ret_rooms[old_room_num] = ".."
-        if new_room[1] == ".":
-            ret_rooms[new_room_num] = f".{c}"
-        else:
-            ret_rooms[new_room_num] = f"{c}{new_room[1]}"
+        ret_rooms[old_room_num] = remove_from_room(ret_rooms[old_room_num])
+        ret_rooms[new_room_num] = add_to_room(ret_rooms[new_room_num], c)
         return (tuple(ret_rooms), hallway)
         
 
@@ -227,7 +243,7 @@ def find_best_outcome_dijkstra(initial_board):
 
 
 def read_input():
-    f = open("day23_small.txt")
+    f = open("day23.txt")
     f.readline()
     hallway = tuple([c for c in f.readline() if c == "."])
     side_rooms = [[], [], [], []]
@@ -240,7 +256,8 @@ def read_input():
 
 def make_part2_board(board):
     rooms, hallway = board
-    rooms = tuple([f"{room}{''.join(reversed(room))}" for room in rooms])
+    to_insert = ['DD', 'CB', 'BA', 'AC']
+    rooms = tuple([f"{room[0]}{to_insert[idx]}{room[1]}" for idx, room in enumerate(rooms)])
     return rooms, hallway
 
 def render_board(board):
@@ -257,11 +274,11 @@ def render_board(board):
             s += "  "
         s += "#"
         for room in rooms:
-            s += room[0] + "#"
+            s += room[room_depth] + "#"
         if room_depth == 0:
             s += "##"
         s += "\n"
-    s += "  " + ("#" * 9)
+    s += "  " + ("#" * 9) + "\n"
     return s
 
 def print_board(board):
@@ -283,7 +300,7 @@ def print_path(path):
 
 def main():
     initial_board = read_input()
-    print("initial board:")
+    print("initial board (part 1):")
     print_board(initial_board)
 
     print()
@@ -292,6 +309,15 @@ def main():
     print_path(path)
     print("part 1", min_cost)
     #print(len(list(iterate_all_boards(initial_board))))
+
+    board_part2 = make_part2_board(initial_board)
+    print("initial board (part 2):")
+    print_board(board_part2)
+
+    min_cost, path = find_best_outcome_dijkstra(board_part2)
+    print_path(path)
+    print("part 2", min_cost)
+    
 
 if __name__ == "__main__":
     main()
