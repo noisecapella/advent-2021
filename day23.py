@@ -145,11 +145,6 @@ def new_board_from_pos(board, old_position, new_position):
         return (tuple(ret_rooms), hallway)
         
 
-def sanity_check(board):
-    if not ("".join(sorted(str(board)))).endswith("...AABBCCDD"):
-        import pdb; pdb.set_trace()
-        raise Exception()
-
 def iterate_all_boards(initial_board):
     unvisited = [initial_board]
     visited = set()
@@ -172,32 +167,41 @@ def find_best_outcome_dijkstra(initial_board):
     heap = []  # always sorted, (-distance, board)
     distances = {}  # board: distance. May not contain all distances initially, new boards should assume to have inf distance
     prev = {}  # the path being created
-    unvisited = set()
+    #unvisited = set()
 
-    for board in iterate_all_boards(initial_board):
-        distances[board] = math.inf
-        if board not in unvisited and board != initial_board:
-            unvisited.add(board)
-            heap.append((-math.inf, board))
+    #for board in iterate_all_boards(initial_board):
+    #    distances[board] = math.inf
+    #    if board not in unvisited and board != initial_board:
+    #        unvisited.add(board)
+    #        heap.append((-math.inf, board))
 
     heap.append((0, initial_board))
-    unvisited.add(initial_board)
+    #unvisited.add(initial_board)
     distances[initial_board] = 0
     heap = sorted(heap)
+    visited = set()
 
-    while len(unvisited) > 0:  # while not at end
+    final_board = None
+    while True:  # while not at end
         current_tup = heap.pop(-1)
         current_board = current_tup[1]
-        unvisited.remove(current_board)
+        visited.add(current_board)
 
-        if len(heap) != len(unvisited):
-            import pdb; pdb.set_trace()
+        if is_final(current_board):
+            final_board = current_board
+            break
         
         for old_pos, new_pos, cost in possible_moves(current_board):
             new_board = new_board_from_pos(current_board, old_pos, new_pos)
-            if new_board not in unvisited:
+            if new_board in visited:
                 continue
 
+            if new_board not in distances:
+                distances[new_board] = math.inf
+                tup = (-math.inf, new_board)
+                index = bisect.bisect_left(heap, tup)
+                heap.insert(index, tup)
+            
             old_tup = (-distances[new_board], new_board)
             neighbor_distance = distances[current_board] + cost
             if distances[new_board] > neighbor_distance:
@@ -223,7 +227,7 @@ def find_best_outcome_dijkstra(initial_board):
 
 
 def read_input():
-    f = open("day23.txt")
+    f = open("day23_small.txt")
     f.readline()
     hallway = tuple([c for c in f.readline() if c == "."])
     side_rooms = [[], [], [], []]
@@ -234,19 +238,29 @@ def read_input():
     side_rooms = tuple(["".join(room) for room in side_rooms])
     return side_rooms, "".join(hallway)
 
+def make_part2_board(board):
+    rooms, hallway = board
+    rooms = tuple([f"{room}{''.join(reversed(room))}" for room in rooms])
+    return rooms, hallway
+
 def render_board(board):
     rooms, hallway = board
     s = "#" * 13
     s += "\n"
     s += "#" + hallway + "#\n"
-    s += "###"
-    for room in rooms:
-        s += room[0] + "#"
-    s += "##\n"
-    s += "  #"
-    for room in rooms:
-        s += room[1] + "#"
-    s += "\n"
+
+    room_len = len(rooms[0])
+    for room_depth in range(room_len):
+        if room_depth == 0:
+            s += "##"
+        else:
+            s += "  "
+        s += "#"
+        for room in rooms:
+            s += room[0] + "#"
+        if room_depth == 0:
+            s += "##"
+        s += "\n"
     s += "  " + ("#" * 9)
     return s
 
@@ -254,26 +268,7 @@ def print_board(board):
     print(render_board(board))
 
 
-def main():
-    initial_board = read_input()
-    x = (('BA','.D', 'CC', 'DA'), '...B.......')
-    y = (('BA','..', 'CC', 'DA'), '...B.D.....')
-    z = (('..', 'CD', 'BC', 'DA'), '.B.A.......')
-    #print(list(valid_hallway_spaces(1, x[1])))
-    print("initial board:")
-    print_board(initial_board)
-    #    print()
-    #return
-
-    print()
-    #for old_pos, new_pos, cost in possible_moves(z):
-    #    new_board = new_board_from_pos(z, old_pos, new_pos)
-    #    print(f"  moved {old_pos} to {new_pos}")
-    #    print_board(new_board)
-    #    print()
-    #return
-
-    min_cost, path = find_best_outcome_dijkstra(initial_board)
+def print_path(path):
     for i, board in enumerate(path):
         print()
         print_board(board)
@@ -284,6 +279,17 @@ def main():
                 if new_board_from_pos(path[i-1], old_pos, new_pos) == board:
                     print("cost", cost, old_pos, new_pos)
                     break
+
+
+def main():
+    initial_board = read_input()
+    print("initial board:")
+    print_board(initial_board)
+
+    print()
+
+    min_cost, path = find_best_outcome_dijkstra(initial_board)
+    print_path(path)
     print("part 1", min_cost)
     #print(len(list(iterate_all_boards(initial_board))))
 
