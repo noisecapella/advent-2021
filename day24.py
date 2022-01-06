@@ -9,18 +9,15 @@ def _set_times(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return a*b
     if isinstance(a, int):
-        return {n*a: source for n, source in b.items()}
+        return {n*a for n in b}
     if isinstance(b, int):
-        return {n*b: source for n, source in a.items()}
+        return {n*b for n in a}
 
-    ret = {}
-    for itema, sourcea in a.items():
-        for itemb, sourceb in b.items():
+    ret = set()
+    for itema in a:
+        for itemb in b:
             n = itema * itemb
-            if n not in ret:
-                ret[n] = 0
-            ret[n] |= sourcea | sourceb
-
+            ret.add(n)
     return ret
 
 def _set_add(a, b):
@@ -30,20 +27,18 @@ def _set_add(a, b):
         if a == 0:
             return b
         else:
-            return {n+a: source for n, source in b.items()}
+            return {n+a for n in b}
     if isinstance(b, int):
         if b == 0:
             return a
         else:
-            return {n+b: source for n, source in a.items()}
+            return {n+b for n in a}
 
-    ret = {}
-    for itema, sourcea in a.items():
-        for itemb, sourceb in b.items():
+    ret = set()
+    for itema in a:
+        for itemb in b:
             n = itema + itemb
-            if n not in ret:
-                ret[n] = 0
-            ret[n] |= sourcea | sourceb
+            ret.add(n)
 
     return ret
 
@@ -51,20 +46,18 @@ def _set_sub(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return a-b
     if isinstance(a, int):
-        return {a-n: source for n, source in b.items()}
+        return {a-n for n in b}
     if isinstance(b, int):
         if b == 0:
             return a
         else:
-            return {n-b: source for n, source in a.items()}
+            return {n-b for n in a}
 
-    ret = {}
-    for itema, sourcea in a:
-        for itemb, sourceb in b:
+    ret = set()
+    for itema in a:
+        for itemb in b:
             n = itema - itemb
-            if n not in ret:
-                ret[n] = 0
-            ret[n] |= sourcea | sourceb
+            ret.add(n)
 
     return ret
 
@@ -72,61 +65,51 @@ def _set_div(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return a // b
 
-    ret = {}
+    ret = set()
     if isinstance(a, int):
-        for n, source in b:
+        for n in b:
             if n != 0:
                 p = a // n
-                if p not in ret:
-                    ret[p] = 0
-                ret[p] |= source
+                ret.add(p)
     
     elif isinstance(b, int):
         if b == 1:
             return a
-        for n, source in a.items():
+        for n in a:
             p = n // b
-            if p not in ret:
-                ret[p] = 0
-            ret[p] |= source
+            ret.add(p)
 
     else:
-        for itema, sourcea in a.items():
-            for itemb, sourceb in b.items():
+        for itema in a:
+            for itemb in b:
                 if itemb == 0:
                     continue
                 n = itema // itemb
-                if p not in ret:
-                    ret[p] = 0
-                ret[p] |= sourcea | sourceb
+                ret.add(n)
 
     return ret
 
 def _set_mod(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return a % b
-    ret = {}
+    ret = set()
     if isinstance(a, int):
         if a < 0:
             raise Exception("unexpected")
-        for n, source in b:
+        for n in b:
             if n > 0:
                 p = a % n
-                if p not in ret:
-                    ret[p] = 0
-                ret[p] |= source
+                ret.add(p)
     
     elif isinstance(b, int):
         if b == 1:
             return a
         if b <= 0:
             raise Exception("unexpected")
-        for n, source in a.items():
+        for n in a:
             if n >= 0:
                 p = n % b
-                if p not in ret:
-                    ret[p] = 0
-                ret[p] |= source
+                ret.add(p)
     else:
         a_nums = [itema for itema, sources in a if itema >= 0]
         b_nums = [itemb for itemb, sources in b if itemb > 0]
@@ -134,44 +117,36 @@ def _set_mod(a, b):
             # no need for modulo
             return a
     
-        for itema, sourcea in a:
+        for itema in a:
             if itema < 0:
                 continue
-            for itemb, sourceb in b:
+            for itemb in b:
                 if itemb <= 0:
                     continue
                 p = itema % itemb
-                if p not in ret:
-                    ret[p] = 0
-                ret[p] |= sourcea | sourceb
+                ret.add(p)
     return ret
 
 def _set_eql(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return 1 if a == b else 0
-    ret = {}
+    ret = set()
     if isinstance(a, int):
-        for n, source in b.items():
+        for n in b:
             r = 1 if n == a else 0
-            if r not in ret:
-                ret[r] = 0
-            ret[r] |= source
+            ret.add(r)
     elif isinstance(b, int):
-        for n, source in a.items():
+        for n in a:
             r = 1 if n == b else 0
-            if r not in ret:
-                ret[r] = 0
-            ret[r] |= source
+            ret.add(r)
     else:
-        for itema, sourcea in a.items():
-            for itemb, sourceb in b.items():
+        for itema in a:
+            for itemb in b:
                 r = 1 if itema == itemb else 0
-                if r not in ret:
-                    ret[r] = 0
-                ret[r] |= sourcea | sourceb
+                ret.add(r)
 
     if len(ret) == 1:
-        return list(ret.keys())[0]
+        return list(ret)[0]
     return ret
 
 
@@ -185,7 +160,7 @@ def calc_options(ast):
             return lookup[id(tup)]
 
         if tup is None:
-            ret = (tup, {})
+            ret = (tup, ())
             lookup[id(tup)] = ret
             return ret
 
@@ -198,8 +173,8 @@ def calc_options(ast):
         b_options_tup = _calc_options(tup[2], lookup)
         a_options = a_options_tup if isinstance(a_options_tup, int) else a_options_tup[1]
         b_options = b_options_tup if isinstance(b_options_tup, int) else b_options_tup[1]
-        a_options_values = {a_options} if isinstance(a_options, int) else set(a_options.keys())
-        b_options_values = {b_options} if isinstance(b_options, int) else set(b_options.keys())
+        a_options_values = {a_options} if isinstance(a_options, int) else a_options
+        b_options_values = {b_options} if isinstance(b_options, int) else b_options
 
         if id(tup) in lookup:
             return lookup[id(tup)]
@@ -208,7 +183,7 @@ def calc_options(ast):
         new_tup = (command, a_options_tup, b_options_tup)
         if command == "inp":
             inp_idx = tup[1]
-            ret = (new_tup, {sample_input: _calc_source(inp_idx, sample_input) for sample_input in range(1, 10)})
+            ret = (new_tup, {sample for sample in range(1, 10)})
         elif command == "mul":
             if a_options_values == {1}:
                 ret = b_options_tup
@@ -238,7 +213,7 @@ def calc_options(ast):
         elif command == "eql":
             ret = (new_tup, _set_eql(a_options, b_options))
 
-        ret_options_values = {ret} if isinstance(ret, int) else ({ret[1]} if isinstance(ret[1], int) else set(ret[1].keys()))
+        ret_options_values = {ret} if isinstance(ret, int) else ({ret[1]} if isinstance(ret[1], int) else ret[1])
         #import pdb; pdb.set_trace()
         if ret_options_values == a_options_values:
             ret = a_options_tup
@@ -251,6 +226,101 @@ def calc_options(ast):
         return ret
             
     return _calc_options(ast, {})
+
+
+def find_options(ast_with_options):
+    lookup = {}
+    #valid_options = {}  # idx to list of options
+
+    def _find_options(tup, allowed_options):
+        if not isinstance(tup, tuple):
+            return
+
+        a_options = tup[0][1][1] if isinstance(tup[0][1], tuple) else {tup[0][1]}
+        b_options = tup[0][2][1] if isinstance(tup[0][2], tuple) else {tup[0][2]}
+        allowed_a_options = set()
+        allowed_b_options = set()
+        command = tup[0][0]
+
+        if command == "inp":
+            #import pdb; pdb.set_trace()
+            print(tup[0][1], allowed_options)
+            yield tup[0][1], allowed_options
+            return
+
+        for option in allowed_options:
+            if option not in tup[1]:
+                continue
+
+            if command == "add":
+                # a + b = option
+                # a = option - b
+                # b = option - a
+
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if a_option + b_option == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+                
+            elif command == "sub":
+                # a - b = option
+                # a = option + b
+                # b = a - option
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if a_option - b_option == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+
+
+            elif command == "mul":
+                # a * b = option
+                # a = option // b
+                # b = option // a
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if a_option * b_option == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+            elif command  == "div":
+                # a // b = option
+                # a = option * b
+                # b = a // option
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if b_option != 0 and a_option // b_option == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+                
+            elif command == "mod":
+                # a % b = option
+                # a is any positive number or 0
+                # b is any positive number
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if a_option >= 0 and b_option > 0 and a_option % b_option == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+                
+            elif command == "eql":
+                # option = 1 if a == b else 0
+                for a_option in a_options:
+                    for b_option in b_options:
+                        if (1 if a_option == b_option else 0) == option:
+                            allowed_a_options.add(a_option)
+                            allowed_b_options.add(b_option)
+
+        import pdb; pdb.set_trace()
+        if len(allowed_a_options) > 0 and len(allowed_b_options) > 0:
+            if isinstance(tup[0][1], tuple):
+                yield from _find_options(tup[0][1], allowed_a_options)
+            if isinstance(tup[0][2], tuple):
+                yield from _find_options(tup[0][2], allowed_b_options)
+
+    yield from _find_options(ast_with_options, {0})
+    
+    
 
 
 def find_inps(ast_with_options):
@@ -418,8 +488,8 @@ def main():
     ast_with_options = calc_options(ast["z"])
     print("looking for the highest inputs...")
     inps = list(find_inps(ast_with_options))
+    x = list(find_options(ast_with_options))
     import pdb; pdb.set_trace()
-    #calc_max_inputs(inps, ast_with_options)
 
     #print(eval_ast(ast["z"], "1" * 14))
     #print(eval_ast(ast["z"], "2" * 14))
