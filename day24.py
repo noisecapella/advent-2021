@@ -1,478 +1,496 @@
+import math
 import json
 from collections import defaultdict
+
 
 def read_instructions():
     return [line.strip().split() for line in open("day24.txt")]
 
 
-def _set_times(a, b):
-    if isinstance(a, int) and isinstance(b, int):
-        return a*b
+def _iter(a):
     if isinstance(a, int):
-        return {n*a for n in b}
-    if isinstance(b, int):
-        return {n*b for n in a}
-
-    ret = set()
-    for itema in a:
-        for itemb in b:
-            n = itema * itemb
-            ret.add(n)
-    return ret
-
-def _set_add(a, b):
-    if isinstance(a, int) and isinstance(b, int):
-        return a+b
-    if isinstance(a, int):
-        if a == 0:
-            return b
-        else:
-            return {n+a for n in b}
-    if isinstance(b, int):
-        if b == 0:
-            return a
-        else:
-            return {n+b for n in a}
-
-    ret = set()
-    for itema in a:
-        for itemb in b:
-            n = itema + itemb
-            ret.add(n)
-
-    return ret
-
-def _set_sub(a, b):
-    if isinstance(a, int) and isinstance(b, int):
-        return a-b
-    if isinstance(a, int):
-        return {a-n for n in b}
-    if isinstance(b, int):
-        if b == 0:
-            return a
-        else:
-            return {n-b for n in a}
-
-    ret = set()
-    for itema in a:
-        for itemb in b:
-            n = itema - itemb
-            ret.add(n)
-
-    return ret
-
-def _set_div(a, b):
-    if isinstance(a, int) and isinstance(b, int):
-        return a // b
-
-    ret = set()
-    if isinstance(a, int):
-        for n in b:
-            if n != 0:
-                p = a // n
-                ret.add(p)
-    
-    elif isinstance(b, int):
-        if b == 1:
-            return a
-        for n in a:
-            p = n // b
-            ret.add(p)
-
+        yield a
     else:
-        for itema in a:
-            for itemb in b:
-                if itemb == 0:
-                    continue
-                n = itema // itemb
-                ret.add(n)
+        yield from a
 
-    return ret
 
-def _set_mod(a, b):
-    if isinstance(a, int) and isinstance(b, int):
-        return a % b
+def _concat_join(func, a, b, *, predicate=None, short_circuit_after_len=None):
     ret = set()
-    if isinstance(a, int):
-        if a < 0:
-            raise Exception("unexpected")
-        for n in b:
-            if n > 0:
-                p = a % n
-                ret.add(p)
     
-    elif isinstance(b, int):
+    for a_item in _iter(a):
+        for b_item in _iter(b):
+            if predicate is not None:
+                a_vals = _iter(a_item)
+                b_vals = _iter(b_item)
+            else:
+                a_vals = [a_item]
+                b_vals = [b_item]
+
+            for a_val in a_vals:
+                for b_val in b_vals:
+                    result = func(a_item, b_item)
+                    if isinstance(result, set):
+                        ret |= result
+                    elif isinstance(result, list):
+                        for item in result:
+                            ret.add(item)
+                    else:
+                        ret.add(result)
+
+            if short_circuit_after_len is not None and len(ret) >= short_circuit_after_len:
+                return ret
+    return ret
+    
+
+def _neg(a):
+    if isinstance(a, int):
+        return -a
+    if isinstance(a, range):
+        return range(-a.start, -a.stop, -a.step)
+    return [_neg(x) for x in a]
+
+    
+def _add(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        return a + b
+    
+    if not isinstance(a, int) and not isinstance(b, int):
+        if isinstance(a, range) and isinstance(b, range):
+            if len(a) < len(b):
+                smaller = a
+                bigger = b
+            else:
+                smaller = b
+                bigger = a
+            return [_add(x, bigger) for x in smaller]
+        else:
+            return _concat_join(_add, a, b)
+
+    if isinstance(a, int):
+        int_param = a
+        other_param = b
+    else:
+        other_param = a
+        int_param = b
+
+    if int_param == 0:
+        return other_param
+        
+    if isinstance(other_param, range):
+        return range(other_param.start + int_param, other_param.stop + int_param, other_param.step)
+    
+    return [_add(int_param, x) for x in other_param]
+    
+def _sub(a, b):
+    return _add(a, _neg(b))
+
+def _mul(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        return a * b
+    
+    if not isinstance(a, int) and not isinstance(b, int):
+        return _concat_join(_mul, a, b)
+
+    if isinstance(a, int):
+        int_param = a
+        other_param = b
+    else:
+        other_param = a
+        int_param = b
+
+    if int_param == 1:
+        return other_param
+    elif int_param == 0:
+        return 0
+        
+    if isinstance(other_param, range):
+        return range(other_param.start * int_param, other_param.stop * int_param, other_param.step * int_param)
+    return [_mul(x, int_param) for x in other_param]
+
+def can_divide(a, b):
+    return b != 0
+
+def can_mod(a, b):
+    return a >= 0 and b > 0
+
+def _div(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        if can_divide(a, b):
+            return a // b
+        return []
+
+    if isinstance(b, int):
         if b == 1:
             return a
+        if isinstance(a, range):
+            if a.step % b == 0:
+                return range(a.start // b, a.stop // b, a.step // b)
+    
+    # TODO: maybe range() // b can be optimized?
+    return _concat_join(_div, a, b, predicate=can_divide)
+
+def _max(a):
+    if isinstance(a, int):
+        return a
+    elif isinstance(a, range):
+        if a.step > 0:
+            return a.stop - 1
+        else:
+            return a.start
+
+    z = None
+    try:
+        for item in a:
+            if z is None or _max(z) < _max(item):
+                z = item
+    except:
+        import pdb; pdb.set_trace()
+    
+    return _max(z)
+
+def _min(a):
+    if isinstance(a, int):
+        return a
+    elif isinstance(a, range):
+        if a.step > 0:
+            return a.start
+        else:
+            return a.stop - 1
+
+    z = None
+    for item in a:
+        if z is None or _min(z) > _min(item):
+            z = item
+    
+    return _min(z)
+
+
+def _mod(a, b):
+    if isinstance(a, int) and isinstance(b, int):
+        if can_mod(a, b):
+            return a % b
+        else:
+            return []
+
+    if not isinstance(a, int) and not isinstance(b, int):        
+        return _concat_join(_mod, a, b, predicate=can_mod)
+
+    if isinstance(b, int):
         if b <= 0:
-            raise Exception("unexpected")
-        for n in a:
-            if n >= 0:
-                p = n % b
-                ret.add(p)
-    else:
-        a_nums = [itema for itema, sources in a if itema >= 0]
-        b_nums = [itemb for itemb, sources in b if itemb > 0]
-        if max(a_nums) < min(b_nums):
-            # no need for modulo
-            return a
-    
-        for itema in a:
-            if itema < 0:
-                continue
-            for itemb in b:
-                if itemb <= 0:
-                    continue
-                p = itema % itemb
-                ret.add(p)
-    return ret
+            return []
+        if isinstance(a, range) and len(a) > 0:
+            max_val = _max(a)
+            if max_val < b:
+                # no need to modulo
+                return a
+            elif a.step == b:
+                if can_mod(a.start, b):
+                    return a.start % b
+                else:
+                    return []
 
-def _set_eql(a, b):
+        return [_mod(x, b) for x in a]
+    if isinstance(a, int):
+        if _max(a) < _min(b):
+            return a
+    return _concat_join(_mod, a, b, predicate=can_mod)
+            
+
+
+def _eql(a, b):
     if isinstance(a, int) and isinstance(b, int):
         return 1 if a == b else 0
-    ret = set()
-    if isinstance(a, int):
-        for n in b:
-            r = 1 if n == a else 0
-            ret.add(r)
-    elif isinstance(b, int):
-        for n in a:
-            r = 1 if n == b else 0
-            ret.add(r)
-    else:
-        for itema in a:
-            for itemb in b:
-                r = 1 if itema == itemb else 0
-                ret.add(r)
 
-    if len(ret) == 1:
-        return list(ret)[0]
+    return _concat_join(_eql, a, b, short_circuit_after_len=2)
+
+
+def _all():
+    return "all"
+
+def _invmul(a, b):
+    # ? * b = a
+    # ? == a invmul b
+    # if b != 0, a // b where a % b == 0
+    # if b == 0, a can be anything
+    if b == 0:
+        return _all()
+
+    s = set()
+    for a_item in _iter(a):
+        for b_item in _iter(b):
+            if _mod(a_item, b_item) == 0:
+                result = _div(a_item, b_item)
+                if isinstance(result, set):
+                    s |= result
+                elif isinstance(result, int):
+                    s.add(result)
+                elif isinstance(result, range):
+                    s.add(result)
+                else:
+                    for item in result:
+                        s.add(item)
+                    
+    return s
+
+def _invdiv(a, b):
+    # ? // b = a
+    # ? = a * b, where b != 0
+    return [_mul(a, b_item) for b_item in _iter(b) if b_item != 0]
+
+def _invmod(a, b):
+    # ? % b = a
+    # ? = a invmod b
+    if not isinstance(b, int):
+        raise Exception("TODO")
+
+    eval_a = _eval(a)
+    if eval_a == set(range(b)):
+        return range(2**100)
+    return [
+        range(a_item, 2**100, b) for a_item in eval_a
+    ]
+
+
+def _inveql(a, b):
+    # 1 if (? == b) else 0 = a
+    # TODO
+    return _all()
+    
+
+
+def _truncate(item, _min, _max):
+    if isinstance(item, range):
+        return {range(max(item.start, _min), min(item.stop, _max + 1), item.step)}
+    elif isinstance(item, int):
+        if _min <= item <= _max:
+            return {item}
+        else:
+            return set()
+    elif item == "all":
+        return range(_min, _max + 1)
+    else:
+        s = set()
+        for x in item:
+            s |= _truncate(x, _min, _max)
+        return s
+
+
+def _intersect(a, b):
+    if a == "all":
+        return b
+
+    if a == set():
+        return set()
+
+    a_max = _max(a)
+    a_min = _min(a)
+    b_min = _min(b)
+    b_max = _max(b)
+
+    if a == range(2**100) and b_min >= 0:
+        return b
+
+    ret = set()
+    # intersection of a and b
+    b_eval = _eval(b)
+    for item_a in ([a] if isinstance(a, range) else _iter(a)):
+        for item_b in _iter(b_eval):
+            # item_b must be a number since it was eval'ed
+            if item_a == item_b or (not isinstance(item_a, int) and item_b in item_a):
+                ret.add(item_b)
+    
+    
+    return ret
+    
+
+
+def _eval(option):
+
+    ret = set()
+    def _eval_inner(a):
+        if isinstance(a, int):
+            ret.add(a)
+        elif isinstance(a, range):
+            for i in a:
+                ret.add(i)
+        elif a == "all":
+            raise Exception("can't evaluate all")
+        else:
+            for x in a:
+                _eval_inner(x)
+    _eval_inner(option)
     return ret
 
+def _looks_like_range(s):
+    if {type(x) for x in s} != {int}:
+        return None
+    sorted_s = sorted(s)
+    if len(sorted_s) == 1:
+        return None
+    possible_range = range(min(sorted_s), max(sorted_s) + 1)
+    if len(possible_range) == len(sorted_s) and list(possible_range) == sorted_s:
+        return possible_range
 
-def _calc_source(inp_idx, sample):
-    return 2**((inp_idx * 9) + (sample - 1))
-
-
-def calc_options(ast):
-    def _calc_options(tup, lookup):
-        if id(tup) in lookup:
-            return lookup[id(tup)]
-
-        if tup is None:
-            ret = (tup, ())
-            lookup[id(tup)] = ret
-            return ret
-
-        elif isinstance(tup, int):
-            ret = tup
-            lookup[id(tup)] = ret
-            return ret
-
-        a_options_tup = _calc_options(tup[1], lookup)
-        b_options_tup = _calc_options(tup[2], lookup)
-        a_options = a_options_tup if isinstance(a_options_tup, int) else a_options_tup[1]
-        b_options = b_options_tup if isinstance(b_options_tup, int) else b_options_tup[1]
-        a_options_values = {a_options} if isinstance(a_options, int) else a_options
-        b_options_values = {b_options} if isinstance(b_options, int) else b_options
-
-        if id(tup) in lookup:
-            return lookup[id(tup)]
-
-        command = tup[0]
-        new_tup = (command, a_options_tup, b_options_tup)
-        if command == "inp":
-            inp_idx = tup[1]
-            ret = (new_tup, {sample for sample in range(1, 10)})
-        elif command == "mul":
-            if a_options_values == {1}:
-                ret = b_options_tup
-            elif b_options_values == {1}:
-                ret = a_options_tup
-            else:
-                ret = (new_tup, _set_times(a_options, b_options))
-        elif command == "add":
-            if a_options_values == {0}:
-                ret = b_options_tup
-            elif b_options_values == {0}:
-                ret = a_options_tup
-            else:
-                ret = (new_tup, _set_add(a_options, b_options))
-        elif command == "sub":
-            if b_options_values == {0}:
-                ret = a_options_tup
-            else:
-                ret = (new_tup, _set_sub(a_options, b_options))
-        elif command == "div":
-            if b_options_values == {1}:
-                ret = a_options_tup
-            else:
-                ret = (new_tup, _set_div(a_options, b_options))
-        elif command == "mod":
-            ret = (new_tup, _set_mod(a_options, b_options))
-        elif command == "eql":
-            ret = (new_tup, _set_eql(a_options, b_options))
-
-        ret_options_values = {ret} if isinstance(ret, int) else ({ret[1]} if isinstance(ret[1], int) else ret[1])
-        #import pdb; pdb.set_trace()
-        if ret_options_values == a_options_values:
-            ret = a_options_tup
-        elif ret_options_values == b_options_values:
-            ret = b_options_tup
-
-        if len(ret_options_values) == 1:
-            ret = list(ret_options_values)[0]
-        lookup[id(tup)] = ret
-        return ret
-            
-    return _calc_options(ast, {})
+def _add_to_set(s, option):
+    if isinstance(option, range):
+        s.add(option)
+    elif isinstance(option, int):
+        s.add(option)
+    elif option == "all":
+        s.add(option)
+    else:
+        possible_range = _looks_like_range(option)
+        if possible_range:
+            s.add(possible_range)
+        else:
+            for _option in option:
+                _add_to_set(s, _option)
 
 
-def find_options(ast_with_options):
-    lookup = {}
-    #valid_options = {}  # idx to list of options
+def calc_options(instructions):
+    number_index = 0
+    valid_options = {var: [{0}] for var in ("x", "y", "z", "w")}
 
-    def _find_options(tup, allowed_options):
-        if not isinstance(tup, tuple):
-            return
+    for i, instruction in enumerate(instructions):
+        print("instruction", instruction, i)
+        if len(instruction) == 3:
+            command, arg1, arg2 = instruction
 
-        a_options = tup[0][1][1] if isinstance(tup[0][1], tuple) else {tup[0][1]}
-        b_options = tup[0][2][1] if isinstance(tup[0][2], tuple) else {tup[0][2]}
-        allowed_a_options = set()
-        allowed_b_options = set()
-        command = tup[0][0]
-
-        if command == "inp":
-            #import pdb; pdb.set_trace()
-            print(tup[0][1], allowed_options)
-            yield tup[0][1], allowed_options
-            return
-
-        for option in allowed_options:
-            if option not in tup[1]:
-                continue
-
-            if command == "add":
-                # a + b = option
-                # a = option - b
-                # b = option - a
-
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if a_option + b_option == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-                
-            elif command == "sub":
-                # a - b = option
-                # a = option + b
-                # b = a - option
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if a_option - b_option == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-
-
-            elif command == "mul":
-                # a * b = option
-                # a = option // b
-                # b = option // a
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if a_option * b_option == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-            elif command  == "div":
-                # a // b = option
-                # a = option * b
-                # b = a // option
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if b_option != 0 and a_option // b_option == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-                
-            elif command == "mod":
-                # a % b = option
-                # a is any positive number or 0
-                # b is any positive number
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if a_option >= 0 and b_option > 0 and a_option % b_option == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-                
-            elif command == "eql":
-                # option = 1 if a == b else 0
-                for a_option in a_options:
-                    for b_option in b_options:
-                        if (1 if a_option == b_option else 0) == option:
-                            allowed_a_options.add(a_option)
-                            allowed_b_options.add(b_option)
-
-        import pdb; pdb.set_trace()
-        if len(allowed_a_options) > 0 and len(allowed_b_options) > 0:
-            if isinstance(tup[0][1], tuple):
-                yield from _find_options(tup[0][1], allowed_a_options)
-            if isinstance(tup[0][2], tuple):
-                yield from _find_options(tup[0][2], allowed_b_options)
-
-    yield from _find_options(ast_with_options, {0})
-    
-    
-
-
-def find_inps(ast_with_options):
-    id_lookup = set()
-    def _find_inps(tup, path):
-        if not isinstance(tup, tuple) or id(tup[0]) in id_lookup:
-            return
-
-        id_lookup.add(id(tup[0]))
-
-        if isinstance(tup[0], tuple):
-            if tup[0][0] == "inp":
-                yield tup, path
-
-            yield from _find_inps(tup[0][1], [*path, 0])
-            yield from _find_inps(tup[0][2], [*path, 1])
-    return _find_inps(ast_with_options, [])
-
-
-
-def calc_max_inputs(inps, ast_with_options):
-    def _calc_root_options(inp_node, path, current_options):
-        if len(path) == 0:
-            return current_options
-
-        parent_inp_node = ast_with_options
-        for index in path[:-1]:
-            parent_inp_node = parent_inp_node[0][index + 1]
-
-        child_index = path[-1]
-        command = parent_inp_node[0][0]
-        options = [
-            (_options(parent_inp_node[0][idx + 1]) if idx != child_index else current_options) for idx in range(2)
-        ]
-        if command == "inp":
-            raise Exception("unexpected")
-        elif command == "mul":
-            parent_options = _set_times(*options)
-        elif command == "add":
-            parent_options = _set_add(*options)
-        elif command == "sub":
-            parent_options = _set_sub(*options)
-        elif command == "div":
-            parent_options = _set_div(*options)
-        elif command == "mod":
-            parent_options = _set_mod(*options)
-        elif command == "eql":
-            parent_options = _set_eql(*options)
-
-        return _calc_root_options(parent_inp_node, path[:-1], parent_options)
-
-    zeros = []
-    for inp_idx in range(13, -1, -1):
-        inp, path = inps[inp_idx]
-        if inp[0][1] != inp_idx:
-            continue
-        for sample in (9, 8, 7, 6, 5, 4, 3, 2, 1):
-            option = _calc_root_options(inps, path, (sample,))
-            if 0 in option:
-                print(inp_idx, sample)
-                zeros.append((inp_idx, sample))
-
-    import pdb; pdb.set_trace()
-        
-    
-
-def make_ast(instructions):
-    ast = {"x": 0, "y": 0, "z": 0, "w": 0}
-    input_counter = 0
-    
-    for tup in instructions:
-        command = tup[0]
-        a = tup[1]
-        if len(tup) >= 3:
             try:
-                b = int(tup[2])
-                b_is_var = False
-            except:
-                b = tup[2]
-                b_is_var = True
+                arg2 = int(arg2)
+                options_args2 = arg2
+            except ValueError:
+                options_args2 = valid_options[arg2][-1]
+            
+        else:
+            # inp instruction
+            command, arg1 = instruction
+            arg2 = number_index
+            number_index += 1
+            options_args2 = range(1, 10, 1)
+
+        options_args1 = valid_options[arg1][-1]
+        new_options = set()
 
         if command == "inp":
-            ast[a] = ("inp", input_counter, None)
-            input_counter += 1
-        elif command == "mul":
-            if b == 0:
-                ast[a] = 0
-            elif b == 1:
-                pass
-            elif ast[a] == 1:
-                ast[a] = ast[b] if b_is_var else b
-            elif b_is_var:
-                if ast[b] == 1:
-                    pass
-                else:
-                    ast[a] = ("mul", ast[a], ast[b])
-            else:
-                ast[a] = ("mul", ast[a], b)
-
-        elif command == "div":
-            if b_is_var:
-                ast[a] = ("div", ast[a], ast[b])
-            elif b == 1:
-                pass
-            elif ast[a] == 1:
-                ast[a] = ast[b] if b_is_var else b
-            else:
-                ast[a] = ("div", ast[a], b)
+            _add_to_set(new_options, options_args2)
         elif command == "add":
-            if b == 0:
-                pass
-            elif ast[a] == 0:
-                ast[a] = ast[b] if b_is_var else b
-            elif b_is_var:
-                if ast[b] == 0:
-                    pass
-                else:
-                    ast[a] = ("add", ast[a], ast[b])
-            else:
-                ast[a] = ("add", ast[a], b)
+            _add_to_set(new_options, _add(options_args1, options_args2))
         elif command == "sub":
-            if b == 0:
-                pass
-            elif ast[a] == 0:
-                ast[a] = ast[b] if b_is_var else b
-            elif b_is_var:
-                ast[a] = ("sub", ast[a], ast[b])
-            else:
-                ast[a] = ("sub", ast[a], b)
+            _add_to_set(new_options, _sub(options_args1, options_args2))
+        elif command == "mul":
+            _add_to_set(new_options, _mul(options_args1, options_args2))
+        elif command == "div":
+            _add_to_set(new_options, _div(options_args1, options_args2))
         elif command == "mod":
-            if b == 0:
-                pass
-            elif b_is_var:
-                ast[a] = ("mod", ast[a], ast[b])
-            else:
-                ast[a] = ("mod", ast[a], b)
-        elif command == "eql":                
-            if b_is_var:
-                ast[a] = ("eql", ast[a], ast[b])
-            else:
-                if isinstance(ast[a], int):
-                    ast[a] = 1 if b == ast[a] else 0
-                else:
-                    ast[a] = ("eql", ast[a], b)
-                
+            _add_to_set(new_options, _mod(options_args1, options_args2))
+        elif command == "eql":
+            _add_to_set(new_options, _eql(options_args1, options_args2))
 
-        #if len(_options(ast[a])) == 1:
-        #    ast[a] = list(_options(ast[a]))[0]
-                
-    return ast
+        if len(new_options) > 40:
+            #import pdb; pdb.set_trace()
+            pass
+
+        if len(new_options) == 1:
+            new_options = list(new_options)[0]
+        valid_options[arg1].append(new_options)
+        
+
+        
+    return valid_options
 
 
+def backtrack_options(instructions, valid_options):
+    number_index = 0
+    valid_options["z"][-1] = valid_options["z"][-1].intersection({0})
+    
+
+    for i, instruction in reversed(list(enumerate(instructions))):
+        print("backtrack", i, instruction)
+        if len(instruction) == 3:
+            command, arg1, arg2 = instruction
+
+            try:
+                arg2 = int(arg2)
+                options_args2 = arg2
+            except ValueError:
+                options_args2 = valid_options[arg2][-1]
+            
+        else:
+            # inp instruction
+            command, arg1 = instruction
+            arg2 = number_index
+            number_index += 1
+            options_args2 = range(1, 10, 1)
+
+        root_options = valid_options[arg1].pop()
+        options_args1 = valid_options[arg1][-1]
+        updated_options = set()
+
+        if i == 3 or i == 237 or i == 183:
+            import pdb; pdb.set_trace()
+        
+        # a op b == root_options
+        # a = root_options invop b
+        if command == "inp":
+            result = _eval(root_options).intersection(_eval(options_args2))
+            yield arg1, result
+            _add_to_set(updated_options, result)
+        elif command == "add":
+            _add_to_set(updated_options, _sub(root_options, options_args2))
+        elif command == "sub":
+            _add_to_set(updated_options, _add(root_options, options_args2))
+        elif command == "mul":
+            _add_to_set(updated_options, _invmul(root_options, options_args2))
+        elif command == "div":
+            _add_to_set(updated_options, _invdiv(root_options, options_args2))
+        elif command == "mod":
+            _add_to_set(updated_options, _invmod(root_options, options_args2))
+        elif command == "eql":
+            _add_to_set(updated_options, _inveql(root_options, options_args2))
+
+        if len(updated_options) == 1:
+            updated_options = list(updated_options)[0]
+        valid_options[arg1][-1] = _intersect(updated_options, options_args1)
+        
+
+        
+    return valid_options
+
+
+def eval_instructions(instructions, number):
+    number_index = 0
+    variables = {var: 0 for var in ("x", "y", "z", "w")}
+
+    for instruction in instructions:
+        try:
+            command, arg1, arg2 = instruction
+        except ValueError:
+            command, arg1 = instruction
+            arg2 = int(number[number_index])
+            number_index += 1
+
+        try:
+            arg2 = int(arg2)
+        except ValueError:
+            arg2 = variables[arg2]
+        
+        if command == "inp":
+            variables[arg1] = arg2
+        elif command == "add":
+            variables[arg1] += arg2
+        elif command == "sub":
+            variables[arg1] -= arg2
+        elif command == "mul":
+            variables[arg1] *= arg2
+        elif command == "div":
+            variables[arg1] //= arg2
+        elif command == "mod":
+            variables[arg1] %= arg2
+        elif command == "eql":
+            variables[arg1] = 1 if variables[arg1] == arg2 else 0
+
+    return variables
 
 def pprint(x):
     if isinstance(x, list):
@@ -482,15 +500,12 @@ def pprint(x):
 
 def main():
     instructions = read_instructions()
-    print("calculating ast...")
-    ast = make_ast(instructions)
-    print("calculating ast_with_options...")
-    ast_with_options = calc_options(ast["z"])
+    print("calculating eval_instructions...", eval_instructions(instructions, "13579246899999"))
     print("looking for the highest inputs...")
-    inps = list(find_inps(ast_with_options))
-    x = list(find_options(ast_with_options))
-    import pdb; pdb.set_trace()
-
+    valid_options = calc_options(instructions)
+    print("backtracking...")
+    inps = list(backtrack_options(instructions, valid_options))
+    print(inps)
     #print(eval_ast(ast["z"], "1" * 14))
     #print(eval_ast(ast["z"], "2" * 14))
 
