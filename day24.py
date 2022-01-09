@@ -4,7 +4,7 @@ from collections import defaultdict
 
 
 def read_instructions():
-    return [line.strip().split() for line in open("day24.txt")]
+    return [line.strip().split() for line in open("day24_small.txt")]
 
 
 def _iter(a):
@@ -113,10 +113,13 @@ def can_divide(a, b):
 def can_mod(a, b):
     return a >= 0 and b > 0
 
+def _div_round_zero(a, b):
+    return int(a / b)
+
 def _div(a, b):
     if isinstance(a, int) and isinstance(b, int):
         if can_divide(a, b):
-            return a // b
+            return _div_round_zero(a, b)
         return []
 
     if isinstance(b, int):
@@ -124,12 +127,14 @@ def _div(a, b):
             return a
         if isinstance(a, range):
             if a.step % b == 0:
-                return range(a.start // b, a.stop // b, a.step // b)
+                return range(_div_round_zero(a.start, b), _div_round_zero(a.stop, b), _div_round_zero(a.step, b))
     
     # TODO: maybe range() // b can be optimized?
     return _concat_join(_div, a, b, predicate=can_divide)
 
 def _max(a):
+    if a == "all":
+        return 2**100
     if isinstance(a, int):
         return a
     elif isinstance(a, range):
@@ -139,16 +144,15 @@ def _max(a):
             return a.start
 
     z = None
-    try:
-        for item in a:
-            if z is None or _max(z) < _max(item):
-                z = item
-    except:
-        import pdb; pdb.set_trace()
+    for item in a:
+        if z is None or _max(z) < _max(item):
+            z = item
     
     return _max(z)
 
 def _min(a):
+    if a == "all":
+        return -2**100
     if isinstance(a, int):
         return a
     elif isinstance(a, range):
@@ -162,7 +166,7 @@ def _min(a):
         if z is None or _min(z) > _min(item):
             z = item
     
-    return _min(z)
+    return z
 
 
 def _mod(a, b):
@@ -233,10 +237,30 @@ def _invmul(a, b):
     return s
 
 def _invdiv(a, b):
+    if not isinstance(b, int):
+        raise Exception("TODO")
     # ? // b = a
     # ? = a * b, where b != 0
-    return [_mul(a, b_item) for b_item in _iter(b) if b_item != 0]
+    if b == 0:
+        return set()
 
+    #import pdb; pdb.set_trace()
+    if isinstance(a, range) and a.step == 1:
+        if a.start == 0:
+            start = -b + 1
+        else:
+            start = a.start * b
+        stop = a.stop * b
+        return range(start, stop)
+    elif isinstance(a, int):
+        if a == 0:
+            return range(-b + 1, b)
+        else:
+            return range(a*b, (a+1)*b)
+    else:
+        return {_invdiv(x, b) for x in a}
+
+                     
 def _invmod(a, b):
     # ? % b = a
     # ? = a invmod b
@@ -278,8 +302,11 @@ def _truncate(item, _min, _max):
 def _intersect(a, b):
     if a == "all":
         return b
+    elif b == "all":
+        return a
 
-    if a == set():
+    #import pdb; pdb.set_trace()
+    if a == set() or b == set():
         return set()
 
     a_max = _max(a)
@@ -290,6 +317,7 @@ def _intersect(a, b):
     if a == range(2**100) and b_min >= 0:
         return b
 
+    
     ret = set()
     # intersection of a and b
     b_eval = _eval(b)
@@ -393,6 +421,9 @@ def calc_options(instructions):
 
         if len(new_options) == 1:
             new_options = list(new_options)[0]
+
+        print(f"new_options, {command} {arg1}={options_args1}, {arg2}={options_args2}, ret={new_options}")
+        #import pdb; pdb.set_trace()
         valid_options[arg1].append(new_options)
         
 
@@ -402,8 +433,8 @@ def calc_options(instructions):
 
 def backtrack_options(instructions, valid_options):
     number_index = 0
-    valid_options["z"][-1] = valid_options["z"][-1].intersection({0})
-    
+    valid_options["z"][-1] = _eval(valid_options["z"][-1]).intersection({0})
+    inps = {}
 
     for i, instruction in reversed(list(enumerate(instructions))):
         print("backtrack", i, instruction)
@@ -420,21 +451,21 @@ def backtrack_options(instructions, valid_options):
             # inp instruction
             command, arg1 = instruction
             arg2 = number_index
-            number_index += 1
             options_args2 = range(1, 10, 1)
+            inps[number_index] = _eval(_intersect(valid_options[arg1][-1], options_args2))
+            number_index += 1
 
-        root_options = valid_options[arg1].pop()
-        options_args1 = valid_options[arg1][-1]
+        #import pdb; pdb.set_trace()
+        root_options = valid_options[arg1][-1]
+        options_args1 = "all"
         updated_options = set()
 
-        if i == 3 or i == 237 or i == 183:
-            import pdb; pdb.set_trace()
+        #import pdb; pdb.set_trace()
         
         # a op b == root_options
         # a = root_options invop b
         if command == "inp":
-            result = _eval(root_options).intersection(_eval(options_args2))
-            yield arg1, result
+            result = _intersect(root_options, options_args2)
             _add_to_set(updated_options, result)
         elif command == "add":
             _add_to_set(updated_options, _sub(root_options, options_args2))
@@ -451,11 +482,10 @@ def backtrack_options(instructions, valid_options):
 
         if len(updated_options) == 1:
             updated_options = list(updated_options)[0]
-        valid_options[arg1][-1] = _intersect(updated_options, options_args1)
-        
+        print(f"updated_options, {command} {arg1}={options_args1}, {arg2}={options_args2}, ret={updated_options}")
+        valid_options[arg1][-1] = updated_options
 
-        
-    return valid_options
+    return valid_options, inps
 
 
 def eval_instructions(instructions, number):
@@ -484,7 +514,7 @@ def eval_instructions(instructions, number):
         elif command == "mul":
             variables[arg1] *= arg2
         elif command == "div":
-            variables[arg1] //= arg2
+            variables[arg1] = _div_round_zero(variables[arg1], arg2)
         elif command == "mod":
             variables[arg1] %= arg2
         elif command == "eql":
@@ -500,12 +530,22 @@ def pprint(x):
 
 def main():
     instructions = read_instructions()
-    print("calculating eval_instructions...", eval_instructions(instructions, "13579246899999"))
+
+
     print("looking for the highest inputs...")
     valid_options = calc_options(instructions)
+    print(valid_options)
     print("backtracking...")
-    inps = list(backtrack_options(instructions, valid_options))
-    print(inps)
+    _, inps = backtrack_options(instructions, valid_options)
+    
+    print("inps", inps)
+
+    return
+    for c1 in range(1, 10, 1):
+        for c2 in range(1, 10, 1):
+            c = f"{c1}{c2}"
+            print(f"eval was {eval_instructions(instructions, c)} {c1}, {c2} {'yes' if (int(c1) in inps[0] and int(c2) in inps[1])  else 'no'}, z was {'yes' if eval_instructions(instructions, c)['z'] == 0 else 'no'}")
+        
     #print(eval_ast(ast["z"], "1" * 14))
     #print(eval_ast(ast["z"], "2" * 14))
 
