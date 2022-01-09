@@ -4,8 +4,7 @@ from collections import defaultdict
 
 
 def read_instructions():
-    return [line.strip().split() for line in open("day24_small.txt")]
-
+    return [line.strip().split() for line in open("day24.txt")]
 
 def _iter(a):
     if isinstance(a, int):
@@ -375,12 +374,12 @@ def _add_to_set(s, option):
                 _add_to_set(s, _option)
 
 
-def calc_options(instructions):
+def calc_options(instructions, inp_inputs):
     number_index = 0
-    valid_options = {var: [{0}] for var in ("x", "y", "z", "w")}
+    valid_options = {var: 0 for var in ("x", "y", "z", "w")}
 
     for i, instruction in enumerate(instructions):
-        print("instruction", instruction, i)
+        #print("instruction", instruction, i)
         if len(instruction) == 3:
             command, arg1, arg2 = instruction
 
@@ -388,18 +387,24 @@ def calc_options(instructions):
                 arg2 = int(arg2)
                 options_args2 = arg2
             except ValueError:
-                options_args2 = valid_options[arg2][-1]
+                options_args2 = valid_options[arg2]
             
         else:
             # inp instruction
             command, arg1 = instruction
             arg2 = number_index
+            try:
+                options_args2 = inp_inputs[number_index]
+            except IndexError:
+                options_args2 = range(1, 10)
             number_index += 1
-            options_args2 = range(1, 10, 1)
 
-        options_args1 = valid_options[arg1][-1]
+        options_args1 = valid_options[arg1]
         new_options = set()
 
+        if i >= 67:
+            # import pdb; pdb.set_trace()
+            pass
         if command == "inp":
             _add_to_set(new_options, options_args2)
         elif command == "add":
@@ -422,77 +427,20 @@ def calc_options(instructions):
         if len(new_options) == 1:
             new_options = list(new_options)[0]
 
-        print(f"new_options, {command} {arg1}={options_args1}, {arg2}={options_args2}, ret={new_options}")
         #import pdb; pdb.set_trace()
-        valid_options[arg1].append(new_options)
+        #print(f"calc i={i} {arg1}={new_options}")
+        valid_options[arg1] = new_options
         
 
         
-    return valid_options
-
-
-def backtrack_options(instructions, valid_options):
-    number_index = 0
-    valid_options["z"][-1] = _eval(valid_options["z"][-1]).intersection({0})
-    inps = {}
-
-    for i, instruction in reversed(list(enumerate(instructions))):
-        print("backtrack", i, instruction)
-        if len(instruction) == 3:
-            command, arg1, arg2 = instruction
-
-            try:
-                arg2 = int(arg2)
-                options_args2 = arg2
-            except ValueError:
-                options_args2 = valid_options[arg2][-1]
-            
-        else:
-            # inp instruction
-            command, arg1 = instruction
-            arg2 = number_index
-            options_args2 = range(1, 10, 1)
-            inps[number_index] = _eval(_intersect(valid_options[arg1][-1], options_args2))
-            number_index += 1
-
-        #import pdb; pdb.set_trace()
-        root_options = valid_options[arg1][-1]
-        options_args1 = "all"
-        updated_options = set()
-
-        #import pdb; pdb.set_trace()
-        
-        # a op b == root_options
-        # a = root_options invop b
-        if command == "inp":
-            result = _intersect(root_options, options_args2)
-            _add_to_set(updated_options, result)
-        elif command == "add":
-            _add_to_set(updated_options, _sub(root_options, options_args2))
-        elif command == "sub":
-            _add_to_set(updated_options, _add(root_options, options_args2))
-        elif command == "mul":
-            _add_to_set(updated_options, _invmul(root_options, options_args2))
-        elif command == "div":
-            _add_to_set(updated_options, _invdiv(root_options, options_args2))
-        elif command == "mod":
-            _add_to_set(updated_options, _invmod(root_options, options_args2))
-        elif command == "eql":
-            _add_to_set(updated_options, _inveql(root_options, options_args2))
-
-        if len(updated_options) == 1:
-            updated_options = list(updated_options)[0]
-        print(f"updated_options, {command} {arg1}={options_args1}, {arg2}={options_args2}, ret={updated_options}")
-        valid_options[arg1][-1] = updated_options
-
-    return valid_options, inps
+    return valid_options['z']
 
 
 def eval_instructions(instructions, number):
     number_index = 0
     variables = {var: 0 for var in ("x", "y", "z", "w")}
 
-    for instruction in instructions:
+    for i, instruction in enumerate(instructions):
         try:
             command, arg1, arg2 = instruction
         except ValueError:
@@ -520,7 +468,8 @@ def eval_instructions(instructions, number):
         elif command == "eql":
             variables[arg1] = 1 if variables[arg1] == arg2 else 0
 
-    return variables
+        #print(f"eval i={i} {arg1}={variables[arg1]}")
+    return variables["z"]
 
 def pprint(x):
     if isinstance(x, list):
@@ -528,26 +477,30 @@ def pprint(x):
     else:
         print(x)
 
+def calc_model_number(instructions, result, highest):
+    if len(result) == 14:
+        return result
+    for inp_idx in range(14):
+        r = range(10 - 1, 0, -1) if highest else range(1, 10)
+        for n in r:
+            inputs = [*result, n]
+            options = calc_options(instructions, inputs)
+            if options == 0 or _intersect(options, 0) == {0}:
+                print("possible match", "".join([str(x) for x in inputs]))
+                sub_result = calc_model_number(instructions, inputs, highest=highest)
+                if sub_result is not None:
+                    return sub_result
+        # didn't work, backtrack
+        return None
+
+
 def main():
     instructions = read_instructions()
 
-
-    print("looking for the highest inputs...")
-    valid_options = calc_options(instructions)
-    print(valid_options)
-    print("backtracking...")
-    _, inps = backtrack_options(instructions, valid_options)
-    
-    print("inps", inps)
-
-    return
-    for c1 in range(1, 10, 1):
-        for c2 in range(1, 10, 1):
-            c = f"{c1}{c2}"
-            print(f"eval was {eval_instructions(instructions, c)} {c1}, {c2} {'yes' if (int(c1) in inps[0] and int(c2) in inps[1])  else 'no'}, z was {'yes' if eval_instructions(instructions, c)['z'] == 0 else 'no'}")
+    print("looking for the highest/lowest inputs...")
+    print("part 1", calc_model_number(instructions, [], True))
+    print("part 2", calc_model_number(instructions, [], False))
         
-    #print(eval_ast(ast["z"], "1" * 14))
-    #print(eval_ast(ast["z"], "2" * 14))
 
 if __name__ == "__main__":
     main()
