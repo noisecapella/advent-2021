@@ -38,7 +38,6 @@ def rz(quarter):
 
 def make_matrices():
     transform_matrices = []
-    neg_vecs = []
     for x_pos in range(3):
         for y_pos in range(3):
             if x_pos == y_pos:
@@ -55,15 +54,9 @@ def make_matrices():
                             mat[2, z_pos] = z_neg
                             transform_matrices.append(mat)
 
-                            neg_vec = np.zeros(shape=(3,))
-                            neg_vec[x_pos] = x_neg
-                            neg_vec[y_pos] = y_neg
-                            neg_vec[z_pos] = z_neg
-                            neg_vecs.append(neg_vec)
-                            
-    return transform_matrices, neg_vecs
+    return transform_matrices
 
-TRANSFORM_LOOKUP, NEG_VECS = make_matrices()
+TRANSFORM_LOOKUP = make_matrices()
 
 
 def transform(vecs, transformation_number):
@@ -91,7 +84,7 @@ def pick_diff(a, b):
     return None
 
 
-def intersects(a, b, a_transformation_number):
+def intersects(a, b):
 
     for transformation_number in range(len(TRANSFORM_LOOKUP)):
         adjusted_b = transform(b, transformation_number)
@@ -100,19 +93,13 @@ def intersects(a, b, a_transformation_number):
             return diff, transformation_number
 
 
-def mul(args):
-    x = 1
-    for arg in args:
-        x *= arg
-    return x
-    
 def calc_beacons(reports):
     locations = {0: np.array([0, 0, 0]) }
-    transformation_numbers = {0: len(NEG_VECS) - 1}
+    transformation_numbers = {}
+    prev = {}
     beacons = set()
 
     while len(locations) < len(reports):
-        print("locations", locations)
         for i, report in enumerate(reports):
             if i in locations:
                 continue
@@ -122,19 +109,39 @@ def calc_beacons(reports):
                 if i in locations:
                     break
 
-                result = intersects(reports[known_location_index], reports[i], known_location_index)
+                result = intersects(reports[known_location_index], reports[i])
                 if result is not None:
-                    location_coord, transformation_number = result
+                    diff, transformation_number = result
                     transformation_numbers[i] = transformation_number
-                    locations[i] = -(location_coord * NEG_VECS[transformation_numbers[known_location_index]]) + locations[known_location_index]
-                    print(f"found location {i} {known_location_index} {location_coord} {locations[known_location_index]}")
-                    
-    for location in sorted(list(locations.items())):
-        print(location)
-    return locations
+                    prev[i] = known_location_index
+                    prev_index = known_location_index
+                    while True:
+                        if prev_index != 0:
+                            diff = transform(diff, transformation_numbers[prev_index])
+                        else:
+                            break
+                        prev_index = prev[prev_index]
+                    locations[i] = -diff + locations[known_location_index]
+                    print(f"found location {i} {locations[i]}")
+
+
+    for i, report in enumerate(reports):
+        prev_index = i
+        while True:
+            if prev_index != 0:
+                report = transform(report, transformation_numbers[prev_index])
+            else:
+                break
+            prev_index = prev[prev_index]
+        report = report + locations[i]
+        for coord in report:
+            beacons.add(tuple(coord))
+
+    #import pdb; pdb.set_trace()
+    return len(beacons)
 
 def load_reports():
-    lines = [line.strip() for line in open("day19_medium.txt").readlines()]
+    lines = [line.strip() for line in open("day19.txt").readlines()]
     reports = []
     latest_report = []
     for line in lines:
@@ -156,7 +163,7 @@ def main():
 
     #print(intersects(reports[0], reports[1]))
     #print(intersects(reports[1], reports[4]))
-    print("part 1", len(calc_beacons(reports)))
+    print("part 1", calc_beacons(reports))
     
 
 
