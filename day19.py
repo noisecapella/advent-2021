@@ -1,41 +1,6 @@
 from collections import Counter
 import numpy as np
 
-def sin_cos_q(quarter):
-    if quarter == 0:
-        sin_q = 0
-        cos_q = 1
-    elif quarter == 1:
-        sin_q = 1
-        cos_q = 0
-    elif quarter == 2:
-        sin_q = 0
-        cos_q = -1
-    elif quarter == 3:
-        sin_q = -1
-        cos_q = 0
-    return sin_q, cos_q
-
-
-def rx(quarter):
-    sin_q, cos_q = sin_cos_q(quarter)
-    return np.array([[1, 0, 0],
-                   [0, cos_q, -sin_q],
-                   [0, sin_q, cos_q]])
-
-def ry(quarter):
-    sin_q, cos_q = sin_cos_q(quarter)
-    return np.array([[cos_q, 0, sin_q],
-                   [0, 1, 0],
-                   [-sin_q, 0, cos_q]])
-
-def rz(quarter):
-    sin_q, cos_q = sin_cos_q(quarter)
-    return np.array([[cos_q, -sin_q, 0],
-                   [sin_q, cos_q, 0],
-                   [0, 0, 1]])
-
-
 def make_matrices():
     transform_matrices = []
     for x_pos in range(3):
@@ -75,9 +40,10 @@ def pick_diff(a, b):
     for coord_a in a:
         for coord_b in b:
             diff = coord_b - coord_a
-            b_set = {tuple(z)  for z in b - diff}
-            overlap = a_set.intersection(b_set)
-            overlap_count = len(overlap)
+            overlap_count = 0
+            for inner_coord_b in b:
+                if tuple(inner_coord_b - diff) in a_set:
+                    overlap_count += 1
             if overlap_count >= 12:
                 return diff
                 
@@ -138,7 +104,7 @@ def calc_beacons(reports):
             beacons.add(tuple(coord))
 
     #import pdb; pdb.set_trace()
-    return len(beacons)
+    return beacons, locations
 
 def load_reports():
     lines = [line.strip() for line in open("day19.txt").readlines()]
@@ -163,8 +129,15 @@ def main():
 
     #print(intersects(reports[0], reports[1]))
     #print(intersects(reports[1], reports[4]))
-    print("part 1", calc_beacons(reports))
-    
+    beacons, locations = calc_beacons(reports)
+    print("part 1", len(beacons))
+
+    distances = []
+    for scanner_a in locations.values():
+        for scanner_b in locations.values():
+            distances.append((scanner-a - scanner-b).sum())
+    distances = sorted(distances)
+    print("part 2", distances[-1])
 
 
 if __name__ == "__main__":
