@@ -135,7 +135,7 @@ def main():
     distances = []
     for scanner_a in locations.values():
         for scanner_b in locations.values():
-            distances.append((scanner_a - scanner_b).sum())
+            distances.append(abs(scanner_b[0] - scanner_a[0]) + abs(scanner_b[1] - scanner_a[1]) + abs(scanner_b[2] - scanner_a[2]))
     distances = sorted(distances)
     print("part 2", distances[-1])
 
